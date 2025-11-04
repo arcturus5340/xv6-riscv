@@ -25,7 +25,7 @@ fmtname(char *path)
 }
 
 void
-ls(char *path)
+ls(char *path, short is_recursive)
 {
   char buf[512], *p;
   int fd;
@@ -50,6 +50,8 @@ ls(char *path)
     break;
 
   case T_DIR:
+    if(is_recursive)
+      printf("%s:\n", path);
     if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
       printf("ls: path too long\n");
       break;
@@ -68,6 +70,27 @@ ls(char *path)
       }
       printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, (int) st.size);
     }
+    if(is_recursive) {
+      printf("\n");
+      close(fd);
+      if((fd = open(path, O_RDONLY)) < 0){
+        fprintf(2, "ls: cannot open %s\n", path);
+        return;
+      }
+      while(read(fd, &de, sizeof(de)) == sizeof(de)){
+        if(de.inum == 0)
+            continue;
+        memmove(p, de.name, DIRSIZ);
+        p[DIRSIZ] = 0;
+        if(stat(buf, &st) < 0){
+          printf("ls: cannot stat %s\n", buf);
+          continue;
+        }
+        if(st.type == T_DIR
+        && strcmp(p, ".") != 0 && strcmp(p, "..") != 0)
+          ls(buf, is_recursive);
+      }
+    }
     break;
   }
   close(fd);
@@ -77,12 +100,27 @@ int
 main(int argc, char *argv[])
 {
   int i;
+  short is_recursive = 0;
 
-  if(argc < 2){
-    ls(".");
+  if (argc > 1) {
+    for (i = 1; i < argc; i++) {
+      if (strcmp(argv[i], "-R") == 0) {
+        is_recursive = 1;
+        break;
+      }
+    }
+  }
+
+  if(argc < 2 + is_recursive){
+    ls(".", is_recursive);
     exit(0);
   }
-  for(i=1; i<argc; i++)
-    ls(argv[i]);
+
+  for(i=1; i<argc; i++) {
+    if(strcmp(argv[i], "-R") == 0)
+      continue;
+    ls(argv[i], is_recursive);
+  }
+
   exit(0);
 }

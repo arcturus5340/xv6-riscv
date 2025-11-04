@@ -1,0 +1,10 @@
+Question 2.1
+write(), strcmp(), atoi(), fork(), exec(), exit(), pause()
+
+Question 2.2
+UPROGS=\
+    ...
+	$U/_watch\
+
+Question 2.4
+The program continues to run because there are no signals in xv6.
