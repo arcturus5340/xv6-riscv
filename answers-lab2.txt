@@ -1,0 +1,145 @@
+Question 1.6
+
+xv6 will not start because init command will not run.
+
+Question 2.1
+
+va 0x0 pte 0x21FC885B pa 0x87F22000 perm 0x5B
+PTE: 0x21FC885B -> 0x0000000021FC885B =
+0000000000000000000000000000000000100001111111001000100001011011
+|Reserved||           Physical Page Number           |||DAGUXWRV
+                                                       ﹂ RSW
+Physical Page Number = 0x87F22
+D = 0 -> the page has not been written to
+A = 1 -> the page has been accessed by the hardware
+G = 0 -> page is not shared across all data spaces
+U = 1 -> instructions in user mode are allowed to access the page
+X = 1 -> CPU may interpret the content of page as a code and execute it
+W = 0 -> it's not allowed to write to the page
+R = 1 -> it's allowed to read the page
+V = 1 -> the mapping is valid and hardware can use PTE
+
+va 0x1000 pte 0x21FC7C17 pa 0x87F1F000 perm 0x17
+PTE: 0x21FC7C17 -> 0x0000000021FC7C17 =
+0000000000000000000000000000000000100001111111000111110000010111
+|Reserved||           Physical Page Number           |||DAGUXWRV
+                                                       ﹂ RSW
+Physical Page Number = 0x87F1F
+D = 0 -> the page has not been written to
+A = 0 -> the page has not been accessed by the hardware
+G = 0 -> page is not shared across all data spaces
+U = 1 -> instructions in user mode are allowed to access the page
+X = 0 -> CPU may not interpret the content of page as a code and execute it
+W = 1 -> it's allowed to write to the page
+R = 1 -> it's allowed to read the page
+V = 1 -> the mapping is valid and hardware can use PTE
+
+va 0x2000 pte 0x21FC7807 pa 0x87F1E000 perm 0x7
+PTE: 0x21FC7807 -> 0x0000000021FC7807 =
+0000000000000000000000000000000000100001111111000111100000000111
+|Reserved||           Physical Page Number           |||DAGUXWRV
+                                                       ﹂ RSW
+Physical Page Number = 0x87F1E
+D = 0 -> the page has not been written to
+A = 0 -> the page has not been accessed by the hardware
+G = 0 -> page is not shared across all data spaces
+U = 0 -> instructions in user mode are not allowed to access the page
+X = 0 -> CPU may not interpret the content of page as a code and execute it
+W = 1 -> it's allowed to write to the page
+R = 1 -> it's allowed to read the page
+V = 1 -> the mapping is valid and hardware can use PTE
+
+va 0x3000 pte 0x21FC74D7 pa 0x87F1D000 perm 0xD7
+PTE: 0x21FC74D7 -> 0x0000000021FC74D7 =
+0000000000000000000000000000000000100001111111000111010011010111
+|Reserved||           Physical Page Number           |||DAGUXWRV
+                                                       ﹂ RSW
+Physical Page Number = 0x87F1D
+D = 1 -> the page has been written to
+A = 1 -> the page has been accessed by the hardware
+G = 0 -> page is not shared across all data spaces
+U = 1 -> instructions in user mode are allowed to access the page
+X = 0 -> CPU may not interpret the content of page as a code and execute it
+W = 1 -> it's allowed to write to the page
+R = 1 -> it's allowed to read the page
+V = 1 -> the mapping is valid and hardware can use PTE
+
+va 0x4000 pte 0x0 pa 0x0 perm 0x0
+PTE: 0x0 -> 0x0000000000000000 =
+0000000000000000000000000000000000000000000000000000000000000000
+|Reserved||           Physical Page Number           |||DAGUXWRV
+                                                       ﹂ RSW
+No TPE has been created for this page
+
+va 0x5000 pte 0x0 pa 0x0 perm 0x0
+No TPE has been created for this page as well...
+va 0x6000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x7000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x8000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x9000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x3FFFFF6000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x3FFFFF7000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x3FFFFF8000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x3FFFFF9000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x3FFFFFA000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x3FFFFFB000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x3FFFFFC000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+va 0x3FFFFFD000 pte 0x0 pa 0x0 perm 0x0
+And for this...
+
+va 0x3FFFFFE000 pte 0x21FD08C7 pa 0x87F42000 perm 0xC7
+PTE: 0x21FD08C7 -> 0x0000000021FD08C7 =
+0000000000000000000000000000000000100001111111010000100011000111
+|Reserved||           Physical Page Number           |||DAGUXWRV
+                                                       ﹂ RSW
+Physical Page Number = 0x87F42
+D = 1 -> the page has been written to
+A = 1 -> the page has been accessed by the hardware
+G = 0 -> page is not shared across all data spaces
+U = 0 -> instructions in user mode are not allowed to access the page
+X = 0 -> CPU may not interpret the content of page as a code and execute it
+W = 1 -> it's allowed to write to the page
+R = 1 -> it's allowed to read the page
+V = 1 -> the mapping is valid and hardware can use PTE
+
+va 0x3FFFFFF000 pte 0x2000184B pa 0x80006000 perm 0x4B
+PTE: 0x2000184B -> 0x000000002000184B =
+0000000000000000000000000000000000100000000000000001100001001011
+|Reserved||           Physical Page Number           |||DAGUXWRV
+                                                       ﹂ RSW
+Physical Page Number = 0x80006
+D = 0 -> the page has not been written to
+A = 1 -> the page has been accessed by the hardware
+G = 0 -> page is not shared across all data spaces
+U = 0 -> instructions in user mode are not allowed to access the page
+X = 1 -> CPU may interpret the content of page as a code and execute it
+W = 0 -> it's not allowed to write to the page
+R = 1 -> it's allowed to read the page
+V = 1 -> the mapping is valid and hardware can use PTE
+
+Question 3.2
+
+page table 0x87f25000
+ ..0x0000000000000000: pte 0x0000000021fc8401 pa 0x0000000087f21000
+ .. ..0x0000000000000000: pte 0x0000000021fc8001 pa 0x0000000087f20000
+ .. .. ..0x0000000000000000: pte 0x0000000021fc885b pa 0x0000000087f22000
+ .. .. ..0x0000000000001000: pte 0x0000000021fc7c17 pa 0x0000000087f1f000
+ .. .. ..0x0000000000002000: pte 0x0000000021fc7807 pa 0x0000000087f1e000
+ .. .. ..0x0000000000003000: pte 0x0000000021fc74d7 pa 0x0000000087f1d000
+ ..0x0000003fc0000000: pte 0x0000000021fc9001 pa 0x0000000087f24000
+ .. ..0x0000003fffe00000: pte 0x0000000021fc8c01 pa 0x0000000087f23000
+ .. .. ..0x0000003fffffe000: pte 0x0000000021fd08c7 pa 0x0000000087f42000
+ .. .. ..0x0000003ffffff000: pte 0x000000002000184b pa 0x0000000080006000
+
+Each leaf duplicates the values from the previous question, which have already been discussed in detail.

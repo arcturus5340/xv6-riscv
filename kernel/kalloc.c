@@ -23,10 +23,18 @@ struct {
   struct run *freelist;
 } kmem;
 
+#define MAX_SUPERPGS 32
+
+struct {
+  struct spinlock lock;
+  struct run *freelist;
+} ksupermem;
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&ksupermem.lock, "ksupermem");
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -35,6 +43,10 @@ freerange(void *pa_start, void *pa_end)
 {
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
+  for(; p + PGSIZE <= (char*)pa_end - MAX_SUPERPGS * SUPERPGSIZE; p += PGSIZE)
+    kfree(p);
+  for(; p + SUPERPGSIZE <= (char*)pa_end; p += SUPERPGSIZE)
+    superfree(p);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
     kfree(p);
 }
@@ -78,5 +90,40 @@ kalloc(void)
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+  return (void*)r;
+}
+
+void
+superfree(void *pa)
+{
+  struct run *r;
+
+  if(((uint64)pa % SUPERPGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+    panic("superfree");
+
+  // Fill with junk to catch dangling refs.
+  memset(pa, 1, SUPERPGSIZE);
+
+  r = (struct run*)pa;
+
+  acquire(&ksupermem.lock);
+  r->next = ksupermem.freelist;
+  ksupermem.freelist = r;
+  release(&ksupermem.lock);
+}
+
+void *
+superalloc(void)
+{
+  struct run *r;
+
+  acquire(&ksupermem.lock);
+  r = ksupermem.freelist;
+  if(r)
+    ksupermem.freelist = r->next;
+  release(&ksupermem.lock);
+
+  if(r)
+    memset((char*)r, 5, SUPERPGSIZE); // fill with junk
   return (void*)r;
 }
