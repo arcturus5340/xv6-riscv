@@ -118,6 +118,24 @@ sys_kpgtbl(void)
 }
 #endif
 
+int
+sys_interpose(void)
+{
+  int mask;
+  char path[MAXPATH];
+  struct proc *p;
+
+  p = myproc();
+  argint(0, &mask);
+  if (argstr(1, path, MAXPATH) < 0) {
+    return -1;
+  }
+
+  p->syscalls_mask = mask;
+  safestrcpy(p->syscalls_path, path, MAXPATH);
+
+  return 0;
+}
 
 uint64
 sys_kill(void)

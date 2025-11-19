@@ -1,0 +1,11 @@
+Question 1.2
+
+SYS_fstat can be partially transferred to USYSCALL because it returns a stat structure consisting of the device number,
+inode number, file type, rarely changing, and the number of links to the file and file size, which can change frequently.
+In theory, the entire stat structure can be stored in USYSCALL, but then the kernel will need to rewrite it frequently
+to keep the information up to date.
+
+Question 2.2
+
+To copy a string, we need to call argstr, which will call fetchstr, which will call copyinstr, which will then copy
+the string from the user's virtual address space.
