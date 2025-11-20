@@ -14,6 +14,29 @@ void freerange(void *pa_start, void *pa_end);
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
+int refcount[PHYSTOP / PGSIZE];
+struct spinlock refcount_lock;
+
+void
+dec_refcount(uint64 pa)
+{
+  acquire(&refcount_lock);
+  int new = --refcount[pa / PGSIZE];
+  if (new == 0)
+    kfree((void *)pa);
+  else if (new < 0)
+    panic("refcount: underflow");
+  release(&refcount_lock);
+}
+
+void
+inc_refcount(uint64 pa)
+{
+  acquire(&refcount_lock);
+  refcount[pa / PGSIZE]++;
+  release(&refcount_lock);
+}
+
 struct run {
   struct run *next;
 };
@@ -27,6 +50,7 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&refcount_lock, "refcount");
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -76,7 +100,12 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
-    memset((char*)r, 5, PGSIZE); // fill with junk
+  if(r) {
+    memset((char *) r, 5, PGSIZE); // fill with junk
+    acquire(&refcount_lock);
+    refcount[(uint64)r / PGSIZE] = 1;
+    release(&refcount_lock);
+  }
+
   return (void*)r;
 }

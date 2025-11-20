@@ -205,7 +205,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       continue;
     if(do_free){
       uint64 pa = PTE2PA(*pte);
-      kfree((void*)pa);
+      dec_refcount(pa);
     }
     *pte = 0;
   }
@@ -274,7 +274,7 @@ freewalk(pagetable_t pagetable)
       panic("freewalk: leaf");
     }
   }
-  kfree((void*)pagetable);
+  dec_refcount((uint64)pagetable);
 }
 
 // Free user memory pages,
@@ -299,28 +299,28 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       continue;   // page table entry hasn't been allocated
     if((*pte & PTE_V) == 0)
       continue;   // physical page hasn't been allocated
-    pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
+    if(*pte & PTE_W){
+      *pte |= PTE_RSW0;  // save the W bit
     }
+    *pte |= PTE_RSW1;    // set the COW mapping indicator bit
+    *pte &= ~PTE_W;      // make ro
+    pa = PTE2PA(*pte);
+    sfence_vma();
+
+    flags = PTE_FLAGS(*pte);
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      panic("uvmcopy: mappages");
+    }
+
+    inc_refcount(pa);
   }
   return 0;
-
- err:
-  uvmunmap(new, 0, i / PGSIZE, 1);
-  return -1;
 }
 
 // mark a PTE invalid for user access.
@@ -358,6 +358,23 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     }
 
     pte = walk(pagetable, va0, 0);
+
+    if(*pte & PTE_RSW1){
+      if ((*pte & PTE_RSW0) == 0)
+        return -1;
+
+      uint64 mem = (uint64) kalloc();
+      if(mem == 0)
+        return -1;
+
+      memmove((void *)mem, (void *)pa0, PGSIZE);
+      *pte = (PA2PTE(mem) | PTE_FLAGS(*pte) | PTE_W) & ~PTE_RSW0 & ~PTE_RSW1;
+
+      sfence_vma();
+      dec_refcount(pa0);
+
+      pa0 = mem;
+    }
     // forbid copyout over read-only user text pages.
     if((*pte & PTE_W) == 0)
       return -1;
@@ -452,23 +469,44 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 uint64
 vmfault(pagetable_t pagetable, uint64 va, int read)
 {
-  uint64 mem;
+  uint64 mem = 0;
   struct proc *p = myproc();
 
   if (va >= p->sz)
     return 0;
   va = PGROUNDDOWN(va);
-  if(ismapped(pagetable, va)) {
-    return 0;
+  if(!ismapped(pagetable, va)) {
+    mem = (uint64) kalloc();
+    if (mem == 0)
+      return 0;
+    memset((void *) mem, 0, PGSIZE);
+    if (mappages(p->pagetable, va, PGSIZE, mem, PTE_W | PTE_U | PTE_R) != 0) {
+      kfree((void *) mem);
+      return 0;
+    }
   }
-  mem = (uint64) kalloc();
-  if(mem == 0)
+
+  pte_t *pte;
+  if ((pte = walk(pagetable, va, 0)) == 0)
     return 0;
-  memset((void *) mem, 0, PGSIZE);
-  if (mappages(p->pagetable, va, PGSIZE, mem, PTE_W|PTE_U|PTE_R) != 0) {
-    kfree((void *)mem);
-    return 0;
+
+  if(!read && (*pte & PTE_RSW1)) {
+    uint64 pa = PTE2PA(*pte);
+
+    if ((*pte & PTE_RSW0) == 0)
+      return 0;
+
+    if(mem == 0 && (mem = (uint64) kalloc()) == 0) {
+      return 0;
+    }
+
+    memmove((void *)mem, (void *)pa, PGSIZE);
+    *pte = (PA2PTE(mem) | PTE_FLAGS(*pte) | PTE_W) & ~PTE_RSW0 & ~PTE_RSW1;
+
+    sfence_vma();
+    dec_refcount(pa);
   }
+
   return mem;
 }
 
