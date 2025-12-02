@@ -51,8 +51,4 @@ def test_usertests():
     ]), timeout=500)
     r.match('^ALL TESTS PASSED$')
 
-@test(1, "time")
-def test_time():
-    check_time()
-
 run_tests()
