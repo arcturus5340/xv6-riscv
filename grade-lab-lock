@@ -11,23 +11,23 @@ def test_kalloctest():
         'kalloctest'
     ]), timeout=300)
     
-@test(10, "kalloctest: test1", parent=test_kalloctest)
+@test(5, "kalloctest: test1", parent=test_kalloctest)
 def test_kalloctest_test1():
     r.match('^test1 OK$')
     
-@test(10, "kalloctest: test2", parent=test_kalloctest)
+@test(5, "kalloctest: test2", parent=test_kalloctest)
 def test_kalloctest_test2():
     r.match('^test2 OK$')
 
-@test(10, "kalloctest: test3", parent=test_kalloctest)
+@test(5, "kalloctest: test3", parent=test_kalloctest)
 def test_kalloctest_test3():
     r.match('^test3 OK$')
 
-@test(10, "kalloctest: test4", parent=test_kalloctest)
+@test(5, "kalloctest: test4", parent=test_kalloctest)
 def test_kalloctest_test4():
     r.match('^test4 OK$')
 
-@test(10, "kalloctest: sbrkmuch")
+@test(5, "kalloctest: sbrkmuch")
 def test_sbrkmuch():
     r.run_qemu(shell_script([
         'usertests sbrkmuch'
@@ -40,11 +40,11 @@ def test_rwlktest():
         'rwlktest'
     ]), timeout=150)
     
-@test(30, "rwlktest", parent=test_rwlktest)
+@test(20, "rwlktest", parent=test_rwlktest)
 def test_bcachetest_checktest0():
     r.match('^rwlktest: 4/4 CPUs succeeded$')
     
-@test(19, "usertests")
+@test(10, "usertests")
 def test_usertests():
     r.run_qemu(shell_script([
         'usertests -q'
