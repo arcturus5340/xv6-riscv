@@ -17,12 +17,30 @@ static uint32 local_ip = MAKE_IP_ADDR(10, 0, 2, 15);
 // qemu host's ethernet address.
 static uint8 host_mac[ETHADDR_LEN] = { 0x52, 0x55, 0x0a, 0x00, 0x02, 0x02 };
 
+#define NUM_PORTS 65536
+#define RX_RING_SIZE 16
+
+static int proc_port_map[NUM_PORTS];
+
+struct rx_queue {
+  struct eth *ring[RX_RING_SIZE];
+  int head;
+  int tail;
+  int count;
+};
+
+static struct rx_queue rx_port_queue[NUM_PORTS];
+
 static struct spinlock netlock;
 
 void
 netinit(void)
 {
   initlock(&netlock, "netlock");
+  for (int port = 0; port < NUM_PORTS; port++){
+    proc_port_map[port] = -1;
+  }
+  memset(rx_port_queue, 0, NUM_PORTS * sizeof(struct rx_queue));
 }
 
 
@@ -34,9 +52,23 @@ netinit(void)
 uint64
 sys_bind(void)
 {
-  //
-  // Your code here.
-  //
+  struct proc *p = myproc();
+  int port;
+
+  argint(0, &port);
+  acquire(&netlock);
+  int port_owner = proc_port_map[port];
+  if (port_owner == -1) {
+    proc_port_map[port] = p->pid;
+    release(&netlock);
+    return 0;
+  }
+
+  if (port_owner == p->pid) {
+    release(&netlock);
+    return 0;
+  }
+  release(&netlock);
 
   return -1;
 }
@@ -49,9 +81,14 @@ sys_bind(void)
 uint64
 sys_unbind(void)
 {
-  //
-  // Optional: Your code here.
-  //
+  int port;
+
+  argint(0, &port);
+
+  acquire(&netlock);
+  proc_port_map[port] = -1;
+  wakeup(&proc_port_map[port]);
+  release(&netlock);
 
   return 0;
 }
@@ -74,10 +111,66 @@ sys_unbind(void)
 uint64
 sys_recv(void)
 {
-  //
-  // Your code here.
-  //
-  return -1;
+  struct proc *p = myproc();
+  int dport;
+  uint64 src;
+  uint64 sport;
+  uint64 buf;
+  int maxlen;
+
+  argint(0, &dport);
+  argaddr(1, &src);
+  argaddr(2, &sport);
+  argaddr(3, &buf);
+  argint(4, &maxlen);
+
+  acquire(&netlock);
+
+  struct rx_queue *queue = &rx_port_queue[dport];
+  while (queue->count == 0){
+    sleep(&proc_port_map[dport], &netlock);
+    if(proc_port_map[dport] != p->pid){
+      release(&netlock);
+      return -1;
+    }
+  }
+
+  struct eth *eth_packet = queue->ring[queue->tail];
+  queue->ring[queue->tail] = 0;
+  queue->tail = (queue->tail + 1) % RX_RING_SIZE;
+  queue->count--;
+
+  release(&netlock);
+
+  struct ip *ip_packet = (struct ip *) (eth_packet + 1);
+  struct udp *udp_packet = (struct udp *) (ip_packet + 1);
+
+  uint32 ip_src = ntohl(ip_packet->ip_src);
+  if (copyout(p->pagetable, src, (char *)&ip_src, sizeof(ip_src)) != 0) {
+    kfree((char *)eth_packet);
+    panic("sys_recv copyout src");
+    return -1;
+  }
+
+  uint16 udp_sport = ntohs(udp_packet->sport);
+  if (copyout(p->pagetable, sport, (char *)&udp_sport, sizeof(udp_sport)) != 0) {
+    kfree((char *)eth_packet);
+    panic("sys_recv copyout sport");
+    return -1;
+  }
+
+  char *udp_buf = (char *)(udp_packet + 1);
+  uint64 buf_len = ntohs(udp_packet->ulen) - sizeof(struct udp);
+  buf_len = buf_len > maxlen? maxlen: buf_len;
+  if (copyout(p->pagetable, buf, udp_buf, buf_len) != 0) {
+    kfree((char *)eth_packet);
+    panic("sys_recv copyout buf");
+    return -1;
+  }
+
+  kfree((char *)eth_packet);
+
+  return buf_len;
 }
 
 // This code is lifted from FreeBSD's ping.c, and is copyright by the Regents
@@ -188,10 +281,38 @@ ip_rx(char *buf, int len)
     printf("ip_rx: received an IP packet\n");
   seen_ip = 1;
 
-  //
-  // Your code here.
-  //
-  
+  struct eth *ineth = (struct eth *) buf;
+  struct ip *inip = (struct ip *) (ineth + 1);
+
+  if (inip->ip_p == IPPROTO_UDP) {
+    struct udp *inu = (struct udp *) (inip + 1);
+
+    // check the checksum
+
+    int dport = ntohs(inu->dport);
+
+    acquire(&netlock);
+    if (proc_port_map[dport] == -1) {
+      release(&netlock);
+      kfree(buf);
+      return;
+    }
+
+    struct rx_queue *queue = &rx_port_queue[dport];
+    if (queue->count == RX_RING_SIZE){
+      release(&netlock);
+      kfree(buf);
+      return;
+    }
+
+    queue->ring[queue->head] = ineth;
+    queue->head = (queue->head + 1) % RX_RING_SIZE;
+    queue->count++;
+
+    wakeup(&proc_port_map[dport]);
+
+    release(&netlock);
+  }
 }
 
 //
