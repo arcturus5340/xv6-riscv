@@ -124,29 +124,39 @@ release(struct spinlock *lk)
 static void
 read_acquire_inner(struct rwspinlock *rwlk)
 {
-  // Replace this with your implementation.
-  acquire(&rwlk->l);
+  while(__atomic_load_n(&rwlk->writer_waiting, __ATOMIC_SEQ_CST));
+  while(__sync_lock_test_and_set(&rwlk->lk.locked, 1) != 0);
+  __sync_fetch_and_add(&rwlk->readers, 1);
+  __sync_lock_release(&rwlk->lk.locked);
+  __sync_synchronize();
+
+//  printf("Acquire: %d\n", x+1);
 }
 
 static void
 read_release_inner(struct rwspinlock *rwlk)
 {
-  // Replace this with your implementation.
-  release(&rwlk->l);
+  __sync_synchronize();
+  __sync_fetch_and_sub(&rwlk->readers, 1);
+//  printf("Release: %d\n", x-1);
 }
 
 static void
 write_acquire_inner(struct rwspinlock *rwlk)
 {
-  // Replace this with your implementation.
-  acquire(&rwlk->l);
+  __atomic_store_n(&rwlk->writer_waiting, 1, __ATOMIC_SEQ_CST);
+  acquire(&rwlk->lk);
+  while(__atomic_load_n(&rwlk->readers, __ATOMIC_SEQ_CST) != 0);
+  __sync_synchronize();
 }
 
 static void
 write_release_inner(struct rwspinlock *rwlk)
 {
-  // Replace this with your implementation.
-  release(&rwlk->l);
+  __sync_synchronize();
+  release(&rwlk->lk);
+  __atomic_store_n(&rwlk->writer_waiting, 0, __ATOMIC_SEQ_CST);
+//  printf("Write release: %d\n", rwlk->w.locked);
 }
 
 void
@@ -181,7 +191,9 @@ void
 initrwlock(struct rwspinlock *rwlk)
 {
   // Replace this with your implementation.
-  initlock(&rwlk->l, "rwlk");
+  initlock(&rwlk->lk, "rwlk");
+  rwlk->readers = 0;
+  rwlk->writer_waiting = 0;
 }
 
 // Test rwspinlock implementation.
