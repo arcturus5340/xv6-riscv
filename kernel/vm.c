@@ -5,8 +5,11 @@
 #include "riscv.h"
 #include "defs.h"
 #include "spinlock.h"
+#include "sleeplock.h"
 #include "proc.h"
 #include "fs.h"
+#include "fcntl.h"
+#include "file.h"
 
 /*
  * the kernel's page table.
@@ -454,6 +457,52 @@ vmfault(pagetable_t pagetable, uint64 va, int read)
 {
   uint64 mem;
   struct proc *p = myproc();
+  struct vma *v = 0;
+  uint64 pa;
+
+  for (int i = 0; i < NVMA; i++) {
+    if (!p->vmas[i].used)
+      continue;
+    if ((p->vmas[i].addr <= va) && (va < p->vmas[i].addr + p->vmas[i].len)) {
+      v = &p->vmas[i];
+      break;
+    }
+  }
+  if (v != 0) {
+    if (read && !(v->prot & PROT_READ))
+      return 0;
+    if(!read && !(v->prot & PROT_WRITE)) {
+      return 0;
+    }
+
+    if ((pa = (uint64)kalloc()) == 0) return 0;
+    memset((void *)pa, 0, PGSIZE);
+
+    begin_op();
+    struct inode *ip = v->f->ip;
+
+    uint n = PGSIZE;
+    if (PGROUNDDOWN(va) - v->addr + v->offset + n > ip->size) {
+      n = ip->size - (PGROUNDDOWN(va) - v->addr + v->offset);
+    }
+
+    ilock(ip);
+    if (readi(ip, 0, pa, PGROUNDDOWN(va) - v->addr + v->offset, n) != n)
+      panic("vmfailt: readi");
+    iunlock(ip);
+    end_op();
+
+    int flags = PTE_U;
+    if (v->prot & PROT_READ)  flags |= PTE_R;
+    if (v->prot & PROT_WRITE) flags |= PTE_W;
+    if (v->prot & PROT_EXEC)  flags |= PTE_X;
+
+    if (mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, pa, flags) != 0) {
+      kfree((void *)pa);
+      return 0;
+    }
+    return pa;
+  }
 
   if (va >= p->sz)
     return 0;

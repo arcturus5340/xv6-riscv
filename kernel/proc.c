@@ -3,8 +3,12 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
+#include "sleeplock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fs.h"
+#include "fcntl.h"
+#include "file.h"
 
 struct cpu cpus[NCPU];
 
@@ -145,6 +149,10 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
+  for(int i = 0; i < NVMA; i++) {
+    p->vmas[i].used = 0;
+  }
 
   return p;
 }
@@ -289,6 +297,13 @@ kfork(void)
 
   pid = np->pid;
 
+  for(int i = 0; i < NVMA; i++) {
+    if(p->vmas[i].used) {
+      memmove(&np->vmas[i], &p->vmas[i], sizeof(p->vmas[i]));
+      filedup(p->vmas[i].f);
+    }
+  }
+
   release(&np->lock);
 
   acquire(&wait_lock);
@@ -341,6 +356,18 @@ kexit(int status)
   iput(p->cwd);
   end_op();
   p->cwd = 0;
+
+  for(int i = 0; i < NVMA; i++) {
+    if(p->vmas[i].used) {
+      if(p->vmas[i].flags & MAP_SHARED && (p->vmas[i].prot & PROT_WRITE)) {
+        filewrite_back(&p->vmas[i], p->vmas[i].addr, p->vmas[i].len);
+      }
+      uvmunmap(p->pagetable, p->vmas[i].addr, p->vmas[i].len / PGSIZE, 1);
+
+      fileclose(p->vmas[i].f);
+      p->vmas[i].used = 0;
+    }
+  }
 
   acquire(&wait_lock);
 
@@ -683,5 +710,31 @@ procdump(void)
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+  }
+}
+
+void
+filewrite_back(struct vma *v, uint64 addr, int len)
+{
+  for (uint64 p = addr; p < addr + len; p += PGSIZE) {
+    pte_t *pte = walk(myproc()->pagetable, p, 0);
+    if (pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
+      continue;
+
+    uint64 pa = PTE2PA(*pte);
+
+    begin_op();
+    struct inode *ip = v->f->ip;
+
+    uint n = PGSIZE;
+    if (p - v->addr + v->offset + n > ip->size) {
+      n = ip->size - (p - v->addr + v->offset);
+    }
+
+    ilock(ip);
+    if (writei(ip, 0, pa, p - v->addr + v->offset, n) != n)
+      panic("filewrite_back: writei");
+    iunlock(ip);
+    end_op();
   }
 }
